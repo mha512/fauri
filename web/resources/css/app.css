@@ -1,0 +1,53 @@
+@import url('https://fonts.googleapis.com/css2?family=Noto+Nastaliq+Urdu:wght@400;600;700&family=Plus+Jakarta+Sans:wght@400;500;600;700;800&display=swap');
+
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+    body {
+        @apply antialiased text-slate-800 bg-slate-50 dark:bg-[#0B1219] dark:text-slate-100 transition-colors duration-200;
+        font-feature-settings: "cv02", "cv03", "cv04", "cv11";
+    }
+
+    /* Urdu text rendering styles */
+    .urdu-text {
+        font-family: 'Noto Nastaliq Urdu', serif;
+        direction: rtl;
+        text-align: right;
+        line-height: 2.2;
+    }
+}
+
+@layer utilities {
+    .glass-card {
+        background: rgba(255, 255, 255, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+    .dark .glass-card {
+        background: rgba(15, 23, 42, 0.85);
+        backdrop-filter: blur(12px);
+        -webkit-backdrop-filter: blur(12px);
+    }
+
+    .pulse-urgent {
+        box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7);
+        animation: pulse-red 2s infinite;
+    }
+
+    @keyframes pulse-red {
+        0% {
+            transform: scale(0.98);
+            box-shadow: 0 0 0 0 rgba(225, 29, 72, 0.7);
+        }
+        70% {
+            transform: scale(1);
+            box-shadow: 0 0 0 8px rgba(225, 29, 72, 0);
+        }
+        100% {
+            transform: scale(0.98);
+            box-shadow: 0 0 0 0 rgba(225, 29, 72, 0);
+        }
+    }
+}

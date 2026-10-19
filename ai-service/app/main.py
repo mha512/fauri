@@ -72,14 +72,11 @@ def root():
 @app.get("/health")
 def health_check():
     """
-    Health check endpoint returning service status and model availability.
+    Instant health check endpoint returning service status and model availability.
     """
-    classifier_ready = False
-    try:
-        clf = get_classifier()
-        classifier_ready = clf.is_ready()
-    except Exception as e:
-        classifier_ready = False
+    global _classifier, _transcriber
+    classifier_ready = _classifier is not None and _classifier.is_ready()
+    transcriber_ready = _transcriber is not None
 
     return {
         "status": "ok",
@@ -87,6 +84,7 @@ def health_check():
         "timestamp": time.time(),
         "models": {
             "classifier_ready": classifier_ready,
+            "transcriber_ready": transcriber_ready,
             "stt_model": "Systran/faster-whisper-small",
             "embeddings_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         }

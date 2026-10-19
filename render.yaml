@@ -1,0 +1,57 @@
+services:
+  # 1. Laravel Web Application Service
+  - type: web
+    name: fauri-web
+    runtime: docker
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    plan: free
+    region: oregon
+    healthCheckPath: /up
+    envVars:
+      - key: APP_NAME
+        value: "Fauri"
+      - key: APP_ENV
+        value: production
+      - key: APP_DEBUG
+        value: "false"
+      - key: APP_KEY
+        generateValue: true
+      - key: APP_URL
+        fromService:
+          type: web
+          name: fauri-web
+          property: host
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: DB_DATABASE
+        value: /var/www/html/database/database.sqlite
+      - key: SESSION_DRIVER
+        value: database
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: CACHE_STORE
+        value: database
+      - key: AI_SERVICE_URL
+        sync: false # Set to your deployed Hugging Face Space URL (e.g., https://your-username-fauri-ai.hf.space)
+      - key: AI_SERVICE_TIMEOUT
+        value: "30"
+
+  # 2. Database Queue Worker (Optional Background Service)
+  - type: worker
+    name: fauri-queue-worker
+    runtime: docker
+    dockerfilePath: ./web/Dockerfile
+    dockerContext: ./web
+    plan: free
+    region: oregon
+    command: php artisan queue:work --tries=3 --timeout=60
+    envVars:
+      - key: APP_ENV
+        value: production
+      - key: DB_CONNECTION
+        value: sqlite
+      - key: QUEUE_CONNECTION
+        value: database
+      - key: AI_SERVICE_URL
+        sync: false

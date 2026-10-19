@@ -1,0 +1,52 @@
+services:
+  # 1. Python FastAPI AI Service (CPU-only multilingual classifier & Whisper STT)
+  ai-service:
+    build:
+      context: ./ai-service
+      dockerfile: Dockerfile
+    container_name: fauri-ai
+    ports:
+      - "8001:7860"
+    environment:
+      - PORT=7860
+      - PYTHONUNBUFFERED=1
+    healthcheck:
+      test: ["CMD", "curl", "-f", "http://localhost:7860/health"]
+      interval: 15s
+      timeout: 5s
+      retries: 3
+      start_period: 20s
+    restart: unless-stopped
+
+  # 2. Laravel 11 Web Application (Dashboard, Breeze Auth, Livewire 3, Tailwind)
+  web:
+    build:
+      context: ./web
+      dockerfile: Dockerfile
+    container_name: fauri-web
+    ports:
+      - "8000:8000"
+    environment:
+      - APP_NAME=Fauri
+      - APP_ENV=local
+      - APP_DEBUG=true
+      - APP_KEY=base64:91l9sp0FISSSQeGKS4CK4rUgja5+SvsN4ZcIh9yyxjQ=
+      - APP_URL=http://localhost:8000
+      - DB_CONNECTION=sqlite
+      - DB_DATABASE=/var/www/html/database/database.sqlite
+      - SESSION_DRIVER=database
+      - QUEUE_CONNECTION=database
+      - CACHE_STORE=database
+      - AI_SERVICE_URL=http://ai-service:7860
+      - AI_SERVICE_TIMEOUT=30
+    depends_on:
+      ai-service:
+        condition: service_started
+    volumes:
+      - fauri-data:/var/www/html/database
+      - fauri-storage:/var/www/html/storage/app/public
+    restart: unless-stopped
+
+volumes:
+  fauri-data:
+  fauri-storage:
