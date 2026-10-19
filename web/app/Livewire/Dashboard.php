@@ -121,6 +121,7 @@ class Dashboard extends Component
         $message->update([
             'category' => $newCategory,
             'confidence' => 1.0, // Human verified
+            'is_verified' => true,
         ]);
 
         if ($this->activeMessage && $this->activeMessage->id === $messageId) {

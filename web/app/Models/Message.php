@@ -23,6 +23,7 @@ class Message extends Model
         'status',
         'audio_path',
         'detected_language',
+        'is_verified',
         'ai_status',
         'ai_error',
         'message_timestamp',
@@ -32,6 +33,7 @@ class Message extends Model
     {
         return [
             'confidence' => 'float',
+            'is_verified' => 'boolean',
             'message_timestamp' => 'datetime',
         ];
     }

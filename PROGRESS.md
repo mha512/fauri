@@ -76,3 +76,35 @@ An intelligent customer-message triage platform for Pakistani SMBs (WhatsApp tex
 - [x] Wrote `DEPLOY.md` detailing step-by-step free tier hosting (Hugging Face Spaces + Render + Aiven/TiDB MySQL) and cold-start mitigations.
 - [x] Created root `README.md` with Mermaid architecture diagram, quickstart, and benchmarks.
 - [x] Committed all phases to Git.
+
+---
+
+## Phase 6: System Audit & Hardening (Completed)
+
+- [x] **Whisper "small" Model Verification**:
+  - Deleted stale/partial cache locks in Hugging Face Hub cache (`~/.cache/huggingface/hub/.locks`).
+  - Fresh snapshot download of `Systran/faster-whisper-small` (460MB model binary, vocabulary, config).
+  - Explicitly set `WHISPER_MODEL=small`; confirmed transcriber loads "small" (not "tiny" fallback).
+  - Enhanced fallback mechanism with loud logging warnings and exposed `"stt_model": "small"` in `GET /health`.
+  - Full pytest test suite executed: 13/13 passed.
+- [x] **Real Speech-to-Text Accuracy Test**:
+  - Generated Urdu script sample (`urdu_sample.mp3`) and Roman Urdu sample (`roman_urdu_sample.mp3`) via `edge-tts` with Pakistani neural voices (`ur-PK-UzmaNeural`, `ur-PK-AsadNeural`).
+  - Urdu script sample transcribed accurately (`اسلام علیکم مجھے اپنا اوڑر منسوخ کروانا ہے براہ میں حربانی میرے پیسے واپس کر دے`).
+  - Unprompted Whisper classifies spoken Hindustani dialect as `hi` with Devanagari script; forced `language='ur'` produces authentic Nastaliq characters.
+  - Roman Urdu sample with mixed digits showed repetition loops, demonstrating typical Whisper behavior on non-standard numerical code-switching.
+- [x] **End-to-End System Proof**:
+  - Started AI service (`uvicorn` on port 8001), Laravel web server (`php artisan serve` on port 8000), and queue worker daemon (`php artisan queue:work`).
+  - Created message via paste flow -> `ClassifyMessageJob` triaged into `urgent` (`high` urgency, confidence 0.9288) in DB.
+  - Uploaded voice note via app flow -> `TranscribeAudioJob` transcribed audio, saved text, and triggered `ClassifyMessageJob` -> triaged into `refund` in DB.
+  - Full Laravel test suite executed: 32/32 tests passed (96 assertions).
+- [x] **UI & Feature Fixes**:
+  - Added Livewire real-time file upload progress bars for both WhatsApp `.txt` exports and Voice Notes.
+  - Added animated skeleton loaders during Livewire feed filtering and status updates.
+  - Added dynamic `:dir="lang === 'ur' ? 'rtl' : 'ltr'"` attribute for seamless Nastaliq RTL display.
+  - Added `is_verified` database column and wired human category corrections into `is_verified = true`.
+  - Upgraded `train.py` with `--retrain` CLI flag and automated SQLite human-correction feedback loop.
+- [x] **Security Audit & Environment Guard**:
+  - Guarded `DatabaseSeeder.php` to strictly block seeding demo credentials (`demo@fauri.pk` / `password`) in production.
+  - Executed `composer audit`: reported 4 advisories on Laravel 11.x (reported September 2026); upgrade proposal prepared for user confirmation.
+  - Updated `.gitignore` to comprehensively exclude all `.env`, `*.sqlite`, `vendor`, `node_modules`, audio uploads, and test media.
+

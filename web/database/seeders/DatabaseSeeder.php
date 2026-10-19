@@ -17,6 +17,12 @@ class DatabaseSeeder extends Seeder
      */
     public function run(): void
     {
+        // Enforce safety: Demo seed credentials must never run in production
+        if (!app()->environment(['local', 'testing'])) {
+            $this->command?->warn('Demo database seeder (demo@fauri.pk) is strictly disabled outside local/testing environments.');
+            return;
+        }
+
         // 1. Create primary demo user
         $user = User::firstOrCreate(
             ['email' => 'demo@fauri.pk'],

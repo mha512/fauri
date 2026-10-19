@@ -122,9 +122,12 @@ cd ai-service
 # Install dependencies
 pip install -r requirements.txt
 
-# Generate synthetic dataset and train classifier
-python data/generate_dataset.py
+# Set Whisper model size (defaults to 'small', falls back to 'tiny' only if disk < 1.5GB)
+export WHISPER_MODEL=small
+
+# Train baseline classifier or retrain with human-verified corrections from SQLite DB
 python train.py
+python train.py --retrain
 
 # Run tests
 pytest tests/ -v
@@ -148,11 +151,14 @@ npm run build
 cp .env.example .env
 php artisan key:generate
 
-# Run migrations and seed Pakistani SMB demo data
-php artisan migrate:fresh --seed
+# Run migrations and seed Pakistani SMB demo data (local only)
+php artisan migrate --seed
 
 # Run Laravel test suite
 php artisan test
+
+# Start background queue worker (required for async classification & transcription)
+php artisan queue:work --tries=3
 
 # Start development server
 php artisan serve --port=8000

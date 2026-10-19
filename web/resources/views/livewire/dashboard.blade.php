@@ -371,8 +371,31 @@
                 </div>
             </div>
 
+            <!-- Skeleton Loaders during Livewire updates -->
+            <div wire:loading.delay class="divide-y divide-slate-100 dark:divide-slate-800 animate-pulse">
+                @for($i = 0; $i < 4; $i++)
+                <div class="p-4 sm:px-6 flex flex-col md:flex-row md:items-center justify-between gap-4">
+                    <div class="flex items-start gap-3 md:w-1/4">
+                        <div class="w-4 h-4 rounded bg-slate-200 dark:bg-slate-700 mt-1"></div>
+                        <div class="space-y-2 flex-1">
+                            <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-28"></div>
+                            <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-20"></div>
+                        </div>
+                    </div>
+                    <div class="md:w-1/2 space-y-2">
+                        <div class="h-4 bg-slate-200 dark:bg-slate-700 rounded w-3/4"></div>
+                        <div class="h-3 bg-slate-200 dark:bg-slate-700 rounded w-full"></div>
+                    </div>
+                    <div class="md:w-1/4 flex md:justify-end gap-2">
+                        <div class="h-6 w-16 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                        <div class="h-6 w-14 bg-slate-200 dark:bg-slate-700 rounded-full"></div>
+                    </div>
+                </div>
+                @endfor
+            </div>
+
             <!-- List Rows -->
-            <div class="divide-y divide-slate-100 dark:divide-slate-800">
+            <div wire:loading.remove.delay class="divide-y divide-slate-100 dark:divide-slate-800">
                 @forelse($messages as $msg)
                 <div class="p-4 sm:px-6 hover:bg-slate-50/80 dark:hover:bg-slate-800/30 transition flex flex-col md:flex-row md:items-center justify-between gap-4 {{ $msg->urgency === 'high' && $msg->status !== 'resolved' ? 'border-l-4 border-l-rose-500 bg-rose-50/20 dark:bg-rose-950/10' : '' }}">
                     <!-- Customer Column -->
@@ -582,9 +605,22 @@
             <!-- TAB 2: WHATSAPP EXPORT FORM -->
             @if($inputTab === 'export')
             <form wire:submit="submitExport" class="mt-4 space-y-4">
-                <div>
+                <div x-data="{ isUploading: false, progress: 0 }"
+                     x-on:livewire-upload-start="isUploading = true"
+                     x-on:livewire-upload-finish="isUploading = false"
+                     x-on:livewire-upload-error="isUploading = false"
+                     x-on:livewire-upload-progress="progress = $event.detail.progress">
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">WhatsApp Chat Export File (.txt) *</label>
                     <input type="file" wire:model="exportFile" accept=".txt" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-950 dark:file:text-brand-300">
+                    <div x-show="isUploading" class="mt-2 space-y-1">
+                        <div class="flex justify-between text-[11px] text-brand-600 dark:text-brand-400 font-semibold">
+                            <span>Uploading chat transcript...</span>
+                            <span x-text="progress + '%'"></span>
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-1.5 overflow-hidden">
+                            <div class="bg-brand-600 h-1.5 rounded-full transition-all duration-200" :style="'width: ' + progress + '%'"></div>
+                        </div>
+                    </div>
                     <p class="text-[11px] text-slate-400 mt-1">Export chat from WhatsApp without media, upload the generated .txt file.</p>
                     @error('exportFile') <span class="text-xs text-rose-500">{{ $message }}</span> @enderror
                 </div>
@@ -618,9 +654,22 @@
                     </div>
                 </div>
 
-                <div>
+                <div x-data="{ isUploading: false, progress: 0 }"
+                     x-on:livewire-upload-start="isUploading = true"
+                     x-on:livewire-upload-finish="isUploading = false"
+                     x-on:livewire-upload-error="isUploading = false"
+                     x-on:livewire-upload-progress="progress = $event.detail.progress">
                     <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1">Audio Voice Note (ogg, opus, mp3, m4a, wav) *</label>
                     <input type="file" wire:model="voiceFile" accept="audio/*,.ogg,.opus,.mp3,.m4a,.wav" required class="w-full text-xs text-slate-500 file:mr-4 file:py-2 file:px-4 file:rounded-xl file:border-0 file:text-xs file:font-semibold file:bg-brand-50 file:text-brand-700 hover:file:bg-brand-100 dark:file:bg-brand-950 dark:file:text-brand-300">
+                    <div x-show="isUploading" class="mt-2 space-y-1">
+                        <div class="flex justify-between text-[11px] text-brand-600 dark:text-brand-400 font-semibold">
+                            <span>Uploading voice note...</span>
+                            <span x-text="progress + '%'"></span>
+                        </div>
+                        <div class="w-full bg-slate-200 dark:bg-slate-700 rounded-full h-2 overflow-hidden">
+                            <div class="bg-gradient-to-r from-brand-600 to-emerald-500 h-2 rounded-full transition-all duration-300" :style="'width: ' + progress + '%'"></div>
+                        </div>
+                    </div>
                     <p class="text-[11px] text-slate-400 mt-1">Converts via FFmpeg and transcribes automatically with Urdu support.</p>
                     @error('voiceFile') <span class="text-xs text-rose-500">{{ $message }}</span> @enderror
                 </div>

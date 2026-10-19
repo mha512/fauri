@@ -18,7 +18,8 @@
           }
       }"
       x-init="if (darkMode) document.documentElement.classList.add('dark');"
-      :class="{ 'dark': darkMode }">
+      :class="{ 'dark': darkMode }"
+      :dir="lang === 'ur' ? 'rtl' : 'ltr'">
     <head>
         <meta charset="utf-8">
         <meta name="viewport" content="width=device-width, initial-scale=1">

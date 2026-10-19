@@ -15,6 +15,12 @@ from pydantic import BaseModel, Field
 from app.classifier import MessageClassifier
 from app.transcriber import AudioTranscriber
 
+try:
+    from dotenv import load_dotenv
+    load_dotenv()
+except Exception:
+    pass
+
 logging.basicConfig(
     level=logging.INFO,
     format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
@@ -91,20 +97,23 @@ def health_check():
     global _classifier, _transcriber
     classifier_ready = _classifier is not None and _classifier.is_ready()
     transcriber_ready = _transcriber is not None and _transcriber.is_ready()
-    stt_model_name = (
-        f"Systran/faster-whisper-{_transcriber.model_size}"
+    active_model = (
+        _transcriber.model_size
         if (_transcriber and _transcriber.is_ready())
-        else f"Systran/faster-whisper-{os.getenv('WHISPER_MODEL', 'small')}"
+        else os.getenv("WHISPER_MODEL", "small")
     )
+    stt_model_name = f"Systran/faster-whisper-{active_model}"
 
     return {
         "status": "ok",
         "service": "fauri-ai",
+        "stt_model": active_model,
         "timestamp": time.time(),
         "models": {
             "classifier_ready": classifier_ready,
             "transcriber_ready": transcriber_ready,
-            "stt_model": stt_model_name,
+            "stt_model": active_model,
+            "stt_model_fullname": stt_model_name,
             "embeddings_model": "sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2"
         }
     }

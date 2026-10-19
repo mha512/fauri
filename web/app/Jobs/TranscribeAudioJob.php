@@ -47,7 +47,7 @@ class TranscribeAudioJob implements ShouldQueue
         }
 
         $aiUrl = rtrim(config('services.ai.url', 'http://127.0.0.1:8001'), '/');
-        $timeout = (int) config('services.ai.timeout', 45);
+        $timeout = (int) env('AI_SERVICE_AUDIO_TIMEOUT', 90);
 
         try {
             $audioContents = file_get_contents($fullPath);

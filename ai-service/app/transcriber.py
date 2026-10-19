@@ -58,18 +58,26 @@ class AudioTranscriber:
         self.model_size = target_model
         self.model: Optional[WhisperModel] = None
 
+        logger.info("[Transcriber] Initializing faster-whisper model ('%s', %s, %s)...", self.model_size, self.device, self.compute_type)
         print(f"[Transcriber] Initializing faster-whisper model ('{self.model_size}', {self.device}, {self.compute_type})...")
         try:
             self.model = WhisperModel(self.model_size, device=self.device, compute_type=self.compute_type)
+            logger.info("[Transcriber] Whisper model ('%s') loaded successfully.", self.model_size)
             print(f"[Transcriber] Whisper model ('{self.model_size}') loaded successfully.")
         except Exception as e:
-            print(f"[Transcriber] Warning: Failed to load '{self.model_size}' model: {e}")
+            logger.warning("****************************************************************")
+            logger.warning("[Transcriber] LOUD WARNING: Failed to load '%s' Whisper model: %s", self.model_size, e)
+            print(f"[Transcriber] LOUD WARNING: Failed to load '{self.model_size}' model: {e}")
             if self.model_size != "tiny":
-                print("[Transcriber] Falling back to 'tiny' Whisper model...")
+                logger.warning("[Transcriber] LOUD WARNING: Falling back to 'tiny' Whisper model!")
+                logger.warning("****************************************************************")
+                print("[Transcriber] LOUD WARNING: Falling back to 'tiny' Whisper model...")
                 self.model_size = "tiny"
                 self.model = WhisperModel("tiny", device=self.device, compute_type=self.compute_type)
+                logger.info("[Transcriber] Whisper fallback model ('tiny') loaded successfully.")
                 print("[Transcriber] Whisper fallback model ('tiny') loaded successfully.")
             else:
+                logger.warning("****************************************************************")
                 raise e
 
     def is_ready(self) -> bool:

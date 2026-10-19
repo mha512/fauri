@@ -1,17 +1,18 @@
 Fauri Classifier Training Report
 Model: sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2 + LogisticRegression
-Train Accuracy: 99.58%
-Test Accuracy: 84.17%
+Mode: Retrained with DB feedback
+Train Accuracy: 99.79%
+Test Accuracy: 84.30%
 
               precision    recall  f1-score   support
 
-   complaint     0.8667    0.6500    0.7429        20
-     inquiry     0.8571    0.9000    0.8780        20
-       order     0.8261    0.9500    0.8837        20
-       other     0.7917    0.9500    0.8636        20
+   complaint     0.8571    0.6000    0.7059        20
+     inquiry     0.8636    0.9500    0.9048        20
+       order     0.8182    0.9000    0.8571        20
+       other     0.8261    0.9500    0.8837        20
       refund     0.8000    0.8000    0.8000        20
-      urgent     0.9412    0.8000    0.8649        20
+      urgent     0.9000    0.8571    0.8780        21
 
-    accuracy                         0.8417       120
-   macro avg     0.8471    0.8417    0.8389       120
-weighted avg     0.8471    0.8417    0.8389       120
+    accuracy                         0.8430       121
+   macro avg     0.8442    0.8429    0.8383       121
+weighted avg     0.8446    0.8430    0.8386       121
