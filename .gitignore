@@ -1,0 +1,35 @@
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+*.so
+.Python
+env/
+venv/
+ENV/
+.pytest_cache/
+*.log
+
+# Models & Big Blobs
+# (classifier.pkl is small and committed so app starts immediately)
+
+# Laravel / PHP
+web/vendor/
+web/node_modules/
+web/public/storage
+web/public/hot
+web/storage/*.key
+web/.env
+web/.env.backup
+web/.env.production
+web/storage/logs/*.log
+web/storage/framework/cache/data/*
+web/storage/framework/sessions/*
+web/storage/framework/views/*
+web/bootstrap/cache/*.php
+
+# OS & IDE
+.DS_Store
+Thumbs.db
+.idea/
+.vscode/
