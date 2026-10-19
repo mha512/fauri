@@ -71,6 +71,38 @@ def test_transcribe_invalid_format():
         files={"file": ("test.txt", b"plain text", "text/plain")}
     )
     assert response.status_code == 400
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error"] == "invalid_audio_format"
+    assert "detail" in data
+
+def test_transcribe_empty_file_error_json():
+    response = client.post(
+        "/transcribe",
+        files={"file": ("empty.wav", b"", "audio/wav")}
+    )
+    assert response.status_code == 400
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error"] == "empty_file"
+    assert "detail" in data
+
+def test_transcribe_internal_error_json(monkeypatch):
+    from app.transcriber import AudioTranscriber
+    def mock_transcribe(*args, **kwargs):
+        raise RuntimeError("Simulated transcription failure for diagnostic test")
+
+    monkeypatch.setattr(AudioTranscriber, "transcribe", mock_transcribe)
+    wav_bytes = generate_test_wav_bytes(duration_sec=0.1)
+    response = client.post(
+        "/transcribe",
+        files={"file": ("test_error.wav", wav_bytes, "audio/wav")}
+    )
+    assert response.status_code == 500
+    data = response.json()
+    assert data["status"] == "error"
+    assert data["error"] == "transcription_failed"
+    assert "Simulated transcription failure" in data["detail"]
 
 def test_transcribe_audio_wav():
     wav_bytes = generate_test_wav_bytes(duration_sec=0.5)
