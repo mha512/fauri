@@ -436,9 +436,21 @@
                         @endif
 
                         <!-- Raw Text with Urdu / RTL formatting -->
-                        <div class="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 {{ $msg->isUrdu() ? 'urdu-text text-base' : '' }}" dir="{{ $msg->direction() }}">
-                            {{ $msg->body }}
-                        </div>
+                        @if($msg->body === 'Transcription failed, retry' || str_contains($msg->body ?? '', 'Transcription failed'))
+                            <div class="p-2.5 rounded-xl bg-rose-50/80 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-xs font-bold text-rose-700 dark:text-rose-300 flex items-center justify-between gap-2">
+                                <span class="flex items-center gap-1.5">
+                                    <span>⚠️</span>
+                                    <span>Transcription failed, retry</span>
+                                </span>
+                                <button wire:click="retryAi({{ $msg->id }})" class="px-2.5 py-1 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-[11px] font-bold transition shadow-sm">
+                                    Retry
+                                </button>
+                            </div>
+                        @else
+                            <div class="text-sm text-slate-600 dark:text-slate-300 line-clamp-2 {{ $msg->isUrdu() ? 'urdu-text text-base' : '' }}" dir="{{ $msg->direction() }}">
+                                {{ $msg->body }}
+                            </div>
+                        @endif
 
                         <!-- Audio Player if Voice Note -->
                         @if($msg->source === 'voice' && $msg->audio_path)
@@ -463,9 +475,13 @@
                                     AI Triaging...
                                 </span>
                             @elseif($msg->ai_status === 'failed')
-                                <span class="flex items-center gap-1 text-rose-500">
-                                    <span>⚠️ AI Offline</span>
-                                    <button wire:click="retryAi({{ $msg->id }})" class="underline hover:text-rose-400 ml-1">Retry</button>
+                                <span class="flex items-center gap-1 text-rose-500 font-medium">
+                                    @if($msg->source === 'voice' && ($msg->body === 'Transcription failed, retry' || str_contains($msg->body ?? '', 'Transcription failed')))
+                                        <span class="text-rose-600 dark:text-rose-400 font-bold">Transcription failed</span>
+                                    @else
+                                        <span>⚠️ AI Offline</span>
+                                    @endif
+                                    <button wire:click="retryAi({{ $msg->id }})" class="underline hover:text-rose-400 ml-1 font-semibold">Retry</button>
                                 </span>
                             @endif
                         </div>
@@ -654,6 +670,25 @@
                     </div>
                 </div>
 
+                <!-- Language Selector (Urdu default, English, Auto) -->
+                <div>
+                    <label class="block text-xs font-bold text-slate-700 dark:text-slate-300 mb-1.5">Audio Language</label>
+                    <div class="grid grid-cols-3 gap-2">
+                        <label class="flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-semibold cursor-pointer transition {{ $voiceLanguage === 'ur' ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 ring-2 ring-brand-500' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40' }}">
+                            <input type="radio" wire:model.live="voiceLanguage" value="ur" class="sr-only">
+                            <span>🇵🇰 Urdu (Default)</span>
+                        </label>
+                        <label class="flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-semibold cursor-pointer transition {{ $voiceLanguage === 'en' ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 ring-2 ring-brand-500' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40' }}">
+                            <input type="radio" wire:model.live="voiceLanguage" value="en" class="sr-only">
+                            <span>🇬🇧 English</span>
+                        </label>
+                        <label class="flex items-center justify-center gap-1.5 p-2 rounded-xl border text-xs font-semibold cursor-pointer transition {{ $voiceLanguage === 'auto' ? 'border-brand-500 bg-brand-50 dark:bg-brand-950/60 text-brand-700 dark:text-brand-300 ring-2 ring-brand-500' : 'border-slate-200 dark:border-slate-800 text-slate-600 dark:text-slate-400 hover:bg-slate-50 dark:hover:bg-slate-800/40' }}">
+                            <input type="radio" wire:model.live="voiceLanguage" value="auto" class="sr-only">
+                            <span>🌐 Auto</span>
+                        </label>
+                    </div>
+                </div>
+
                 <div x-data="{ isUploading: false, progress: 0 }"
                      x-on:livewire-upload-start="isUploading = true"
                      x-on:livewire-upload-finish="isUploading = false"
@@ -723,9 +758,26 @@
             <!-- Full Message Body -->
             <div class="mt-4">
                 <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Message Content</label>
-                <div class="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm leading-relaxed {{ $activeMessage->isUrdu() ? 'urdu-text text-base' : '' }}" dir="{{ $activeMessage->direction() }}">
-                    {{ $activeMessage->body }}
-                </div>
+                @if($activeMessage->body === 'Transcription failed, retry' || str_contains($activeMessage->body ?? '', 'Transcription failed'))
+                    <div class="p-3.5 rounded-xl bg-rose-50 dark:bg-rose-950/40 border border-rose-200 dark:border-rose-900/60 text-rose-700 dark:text-rose-300 text-sm flex flex-col sm:flex-row sm:items-center justify-between gap-3">
+                        <div>
+                            <div class="font-bold flex items-center gap-1.5">
+                                <span>⚠️</span>
+                                <span>Transcription failed, retry</span>
+                            </div>
+                            @if($activeMessage->ai_error)
+                                <div class="text-xs font-normal text-rose-500 mt-0.5">{{ $activeMessage->ai_error }}</div>
+                            @endif
+                        </div>
+                        <button wire:click="retryAi({{ $activeMessage->id }})" class="px-3.5 py-1.5 rounded-lg bg-rose-600 hover:bg-rose-500 text-white text-xs font-bold transition shadow-sm self-start sm:self-auto">
+                            Retry Transcription
+                        </button>
+                    </div>
+                @else
+                    <div class="p-3.5 rounded-xl bg-slate-100 dark:bg-slate-900 text-slate-900 dark:text-slate-100 text-sm leading-relaxed {{ $activeMessage->isUrdu() ? 'urdu-text text-base' : '' }}" dir="{{ $activeMessage->direction() }}">
+                        {{ $activeMessage->body }}
+                    </div>
+                @endif
             </div>
 
             <!-- Audio Player if audio present -->

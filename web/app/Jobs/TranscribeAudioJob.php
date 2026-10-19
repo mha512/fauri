@@ -21,7 +21,7 @@ class TranscribeAudioJob implements ShouldQueue
     public array $backoff = [5, 15, 45];
     public int $timeout = 90; // Whisper can take a few seconds on CPU
 
-    public function __construct(public Message $message)
+    public function __construct(public Message $message, public string $language = 'ur')
     {
     }
 
@@ -31,6 +31,7 @@ class TranscribeAudioJob implements ShouldQueue
 
         if (!$this->message->audio_path) {
             $this->message->update([
+                'body' => 'Transcription failed, retry',
                 'ai_status' => 'failed',
                 'ai_error' => 'No audio file attached to message',
             ]);
@@ -40,6 +41,7 @@ class TranscribeAudioJob implements ShouldQueue
         $fullPath = Storage::disk('public')->path($this->message->audio_path);
         if (!file_exists($fullPath)) {
             $this->message->update([
+                'body' => 'Transcription failed, retry',
                 'ai_status' => 'failed',
                 'ai_error' => "Audio file missing at path: {$this->message->audio_path}",
             ]);
@@ -52,35 +54,44 @@ class TranscribeAudioJob implements ShouldQueue
         try {
             $audioContents = file_get_contents($fullPath);
             $filename = basename($fullPath);
+            $langParam = $this->language ?: ($this->message->detected_language ?? 'ur');
 
             $response = Http::timeout($timeout)
                 ->attach('file', $audioContents, $filename)
-                ->post("{$aiUrl}/transcribe");
+                ->post("{$aiUrl}/transcribe", [
+                    'language' => $langParam,
+                ]);
 
             if ($response->successful()) {
                 $data = $response->json();
                 $transcript = trim($data['text'] ?? '');
-                $language = $data['language'] ?? 'ur';
+                $detectedLanguage = $data['language'] ?? $langParam;
+
+                // Check for empty or silence
+                if ($transcript === '') {
+                    $this->message->update([
+                        'body' => 'Transcription failed, retry',
+                        'detected_language' => $detectedLanguage,
+                        'category' => 'unclassified',
+                        'urgency' => 'low',
+                        'summary' => 'Voice Note: Transcription failed, retry (inaudible/empty audio)',
+                        'ai_status' => 'failed',
+                        'ai_error' => 'Audio transcription produced no audible words.',
+                    ]);
+                    Log::warning("Voice message #{$this->message->id} transcribed empty/inaudible.");
+                    return;
+                }
 
                 $this->message->update([
-                    'body' => $transcript ?: '[Voice Note: Inaudible or Silence]',
-                    'detected_language' => $language,
+                    'body' => $transcript,
+                    'detected_language' => $detectedLanguage,
                     'ai_status' => 'processing',
                 ]);
 
-                Log::info("Voice message #{$this->message->id} transcribed: \"{$transcript}\" ({$language})");
+                Log::info("Voice message #{$this->message->id} transcribed: \"{$transcript}\" ({$detectedLanguage})");
 
                 // Immediately trigger classification of transcribed text
-                if ($transcript) {
-                    ClassifyMessageJob::dispatch($this->message);
-                } else {
-                    $this->message->update([
-                        'category' => 'other',
-                        'urgency' => 'low',
-                        'summary' => 'Voice Note: Inaudible / Empty audio',
-                        'ai_status' => 'completed',
-                    ]);
-                }
+                ClassifyMessageJob::dispatch($this->message);
             } else {
                 throw new \Exception("AI Service returned HTTP {$response->status()}: " . $response->body());
             }
@@ -103,8 +114,10 @@ class TranscribeAudioJob implements ShouldQueue
     protected function fallback(Throwable $exception): void
     {
         $this->message->update([
+            'body' => 'Transcription failed, retry',
             'category' => 'unclassified',
-            'urgency' => 'medium',
+            'urgency' => 'low',
+            'summary' => 'Voice Note: Transcription failed, retry',
             'ai_status' => 'failed',
             'ai_error' => 'Audio transcription unavailable: ' . substr($exception->getMessage(), 0, 250),
         ]);

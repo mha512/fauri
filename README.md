@@ -5,7 +5,7 @@
   <p><strong>"فوری جواب، مطمئن گاہک"</strong> — Instant Response, Satisfied Customer.</p>
   <p>An autonomous, multi-tenant customer message triage platform built for Pakistani online sellers, clinics, academies, and service businesses dealing with high volumes of Roman Urdu, Urdu Nastaliq, and English voice notes.</p>
 
-  [![Laravel 11](https://img.shields.io/badge/Laravel-11-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)](https://laravel.com)
+  [![Laravel 12](https://img.shields.io/badge/Laravel-12-FF2D20?style=for-the-badge&logo=laravel&logoColor=white)](https://laravel.com)
   [![FastAPI](https://img.shields.io/badge/FastAPI-0.110-009688?style=for-the-badge&logo=fastapi&logoColor=white)](https://fastapi.tiangolo.com)
   [![Whisper STT](https://img.shields.io/badge/faster--whisper-small_int8-blue?style=for-the-badge)](https://github.com/SYSTRAN/faster-whisper)
   [![HuggingFace](https://img.shields.io/badge/MiniLM-L12--v2-yellow?style=for-the-badge&logo=huggingface)](https://huggingface.co/sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2)
@@ -204,3 +204,12 @@ See [DEPLOY.md](file:///c:/Users/Abdullah/Desktop/PSL%20ANALYZER/DEPLOY.md) for 
 ## 8. Brand Identity
 
 See [BRAND.md](file:///c:/Users/Abdullah/Desktop/PSL%20ANALYZER/BRAND.md) for the complete design system, typography rationale, and brand naming etymology.
+
+---
+
+## 9. Known Limitations & Production Caveats
+
+1. **Whisper "small" CPU Speed (~15–25s latency):** On CPU without CUDA hardware acceleration, `faster-whisper-small` (int8 quantized) requires approximately 15–25 seconds of processing time per 6–8 second WhatsApp audio clip. For production, voice note transcription should always be dispatched via the asynchronous Laravel queue (`TranscribeAudioJob`) rather than blocking synchronous HTTP requests.
+2. **TTS-Only Synthetic Audio Testing:** Speech-to-text accuracy verification was conducted using synthetic Pakistani neural TTS voices (`ur-PK-UzmaNeural`, `ur-PK-AsadNeural`). Real-world voice notes recorded via low-cost mobile phone microphones with ambient Pakistani bazaar/traffic background noise, heavy accents, and noisy Roman Urdu code-switching will exhibit higher Word Error Rates (WER). A repeat-token loop guard and temperature fallback (0.2) have been implemented to mitigate repetition artifacts.
+3. **Docker Untested on Host:** Docker deployment assets (`Dockerfile`, `ai-service/Dockerfile`, `docker-compose.yml`) are fully authored according to standard Linux containerization practices, but the Docker daemon was not directly tested or executed on the local Windows host environment during development.
+

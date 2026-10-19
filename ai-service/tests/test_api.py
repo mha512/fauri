@@ -114,3 +114,51 @@ def test_transcribe_audio_wav():
     data = response.json()
     assert "text" in data
     assert "language" in data
+
+def test_transcribe_with_language_parameter():
+    wav_bytes = generate_test_wav_bytes(duration_sec=0.5)
+    
+    # 1. Default language (ur)
+    resp_def = client.post(
+        "/transcribe",
+        files={"file": ("sample_def.wav", wav_bytes, "audio/wav")}
+    )
+    assert resp_def.status_code == 200
+
+    # 2. Forced English (en)
+    resp_en = client.post(
+        "/transcribe",
+        files={"file": ("sample_en.wav", wav_bytes, "audio/wav")},
+        data={"language": "en"}
+    )
+    assert resp_en.status_code == 200
+
+    # 3. Auto detect (auto)
+    resp_auto = client.post(
+        "/transcribe",
+        files={"file": ("sample_auto.wav", wav_bytes, "audio/wav")},
+        data={"language": "auto"}
+    )
+    assert resp_auto.status_code == 200
+
+def test_repeat_token_guard_detection():
+    from app.transcriber import AudioTranscriber
+
+    # 5+ consecutive repeating words should be detected as looping
+    assert AudioTranscriber.detect_looping_output("bhai bhai bhai bhai bhai") is True
+    assert AudioTranscriber.detect_looping_output("order order order order order") is True
+    assert AudioTranscriber.detect_looping_output("tracking tracking tracking tracking tracking") is True
+
+    # 5+ consecutive characters should be detected
+    assert AudioTranscriber.detect_looping_output("एएएएए") is True
+    assert AudioTranscriber.detect_looping_output("aaaaaa") is True
+
+    # Normal text should NOT trigger looping
+    assert AudioTranscriber.detect_looping_output("Assalam o alaikum mera order status batayein") is False
+    assert AudioTranscriber.detect_looping_output("bhai mera parcel kab dispatch hoga") is False
+    assert AudioTranscriber.detect_looping_output("") is False
+
+    # clean_repeats should collapse looping words
+    cleaned = AudioTranscriber.clean_repeats("parcel parcel parcel parcel parcel")
+    assert cleaned == "parcel"
+

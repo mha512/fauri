@@ -46,6 +46,7 @@ class Dashboard extends Component
     public $voiceFile;
     public string $voiceCustomerName = '';
     public string $voiceCustomerPhone = '';
+    public string $voiceLanguage = 'ur'; // ur, en, auto
 
     // Message Detail Modal
     public ?int $selectedMessageId = null;
@@ -106,8 +107,13 @@ class Dashboard extends Component
     public function retryAi(int $messageId): void
     {
         $message = Message::where('business_id', $this->getBusiness()->id)->findOrFail($messageId);
-        if ($message->source === 'voice' && $message->audio_path && !$message->body) {
-            TranscribeAudioJob::dispatch($message);
+        if ($message->source === 'voice' && $message->audio_path && ($message->ai_status === 'failed' || $message->body === 'Transcription failed, retry' || !$message->body)) {
+            $message->update([
+                'body' => '[Audio Voice Note - transcribing...]',
+                'ai_status' => 'pending',
+                'ai_error' => null,
+            ]);
+            TranscribeAudioJob::dispatch($message, $message->detected_language ?? 'ur');
             $this->dispatch('toast', message: "Audio transcription retrying in background...", type: 'info');
         } else {
             ClassifyMessageJob::dispatch($message);
@@ -286,14 +292,16 @@ class Dashboard extends Component
             'urgency' => 'medium',
             'status' => 'pending',
             'audio_path' => $path,
+            'detected_language' => $this->voiceLanguage,
             'ai_status' => 'pending',
             'message_timestamp' => now(),
         ]);
 
-        // Dispatch transcription job
-        TranscribeAudioJob::dispatch($message);
+        // Dispatch transcription job with language preference
+        TranscribeAudioJob::dispatch($message, $this->voiceLanguage);
 
-        $this->reset(['voiceFile', 'voiceCustomerName', 'voiceCustomerPhone', 'showNewMessageModal']);
+        $this->reset(['voiceFile', 'voiceCustomerName', 'voiceCustomerPhone', 'voiceLanguage', 'showNewMessageModal']);
+        $this->voiceLanguage = 'ur';
         $this->dispatch('toast', message: "Voice note uploaded & transcription queued!", type: 'success');
     }
 

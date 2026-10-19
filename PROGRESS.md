@@ -108,3 +108,36 @@ An intelligent customer-message triage platform for Pakistani SMBs (WhatsApp tex
   - Executed `composer audit`: reported 4 advisories on Laravel 11.x (reported September 2026); upgrade proposal prepared for user confirmation.
   - Updated `.gitignore` to comprehensively exclude all `.env`, `*.sqlite`, `vendor`, `node_modules`, audio uploads, and test media.
 
+---
+
+## Phase 7: Laravel 12 Upgrade, STT Repeat Guard & Hardening (Completed)
+
+- [x] **Laravel 12.x Upgrade**:
+  - Upgraded `laravel/framework` from `v11.57.0` to `v12.70.0`.
+  - Upgraded `nunomaduro/collision` to `^8.9.5` and `phpunit/phpunit` to `^11.5.57`.
+  - Removed deprecated `spatie/laravel-ignition`.
+  - Executed `composer audit`: **0 security vulnerability advisories found**.
+  - Suppressed PHP 8.5 `PDO::MYSQL_ATTR_SSL_CA` deprecation warning in `config/database.php` via dynamic `\Pdo\Mysql::ATTR_SSL_CA` constant check without masking real database errors.
+  - Executed `php artisan test`: **32/32 tests passed (96 assertions), 0 failures, 0 deprecation warnings**.
+- [x] **STT Improvements & Language Selection**:
+  - Configured `/transcribe` endpoint to accept optional `language` parameter (`ur`, `en`, `auto`), defaulting to `"ur"`.
+  - Added modern 3-way language selector (Urdu default, English, Auto) in the Livewire voice note upload modal.
+  - Implemented `detect_looping_output()` and `clean_repeats()` guard in `AudioTranscriber`: catches 5+ consecutive repeated tokens or characters, automatically triggering retry with forced language (`"ur"`), temperature fallback (`0.2`), and `condition_on_previous_text=False`.
+  - Re-ran transcription test on Urdu and Roman Urdu audio samples: both completed with HTTP 200, clean Nastaliq output, and zero repetition loops.
+- [x] **Clear Text-Only Failure Fallback in UI**:
+  - In `TranscribeAudioJob.php`: if transcription fails or yields silence, sets message body to `"Transcription failed, retry"` and avoids classifying garbage text.
+  - In Livewire `Dashboard` and blade views: displays prominent `⚠️ Transcription failed, retry` indicator with a 1-click retry button.
+- [x] **Cleanup & Hygiene**:
+  - Removed temporary test scripts and artifacts (`test_flow.php`, `*.mp3`, `*.wav`, `accuracy_report.json`, `urdu_ur_script.txt`).
+  - Confirmed `edge-tts` is NOT included in `ai-service/requirements.txt`.
+  - Verified `git status` contains zero untracked `.env` files, secrets, or large binaries.
+
+---
+
+## Known Limitations & Honest Disclaimers
+
+1. **Whisper "small" CPU Latency (~15–25s):** On standard CPU without GPU acceleration, transcribing a 6–8 second voice note takes ~15–25 seconds. Designed strictly for asynchronous background queue execution (`TranscribeAudioJob`), not blocking user HTTP requests.
+2. **TTS-Only Synthetic Audio Testing:** STT verification was performed using Microsoft Edge synthetic neural TTS voices (`ur-PK-UzmaNeural`, `ur-PK-AsadNeural`). In real-world environments, background noise, low-end phone microphones, heavy accents, and mixed Roman Urdu/English code-switching will yield higher error rates.
+3. **Docker Untested on Host:** Docker deployment specifications (`Dockerfile`, `ai-service/Dockerfile`, `docker-compose.yml`) are written according to best practices for containerized cloud deployment (Render & Hugging Face Spaces), but Docker engine was not run or verified on this Windows development host.
+
+

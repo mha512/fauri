@@ -144,10 +144,14 @@ def classify_message(payload: ClassifyRequest):
         500: {"model": ErrorResponse, "description": "Server error during audio conversion or model transcription"}
     }
 )
-async def transcribe_audio(file: UploadFile = File(...)):
+async def transcribe_audio(
+    file: UploadFile = File(...),
+    language: Optional[str] = Form("ur")
+):
     """
     Accepts WhatsApp audio formats (ogg/opus, mp3, m4a, wav, aac), converts via ffmpeg,
-    and transcribes using faster-whisper with language auto-detection.
+    and transcribes using faster-whisper.
+    Accepts optional 'language' param: 'ur' (default), 'en', 'auto'.
     Returns clear, structured JSON on any error instead of a bare 500.
     """
     allowed_extensions = {".ogg", ".opus", ".mp3", ".m4a", ".wav", ".aac"}
@@ -180,8 +184,12 @@ async def transcribe_audio(file: UploadFile = File(...)):
                 }
             )
 
+        valid_lang = (language or "ur").strip().lower()
+        if valid_lang not in ("ur", "en", "auto"):
+            valid_lang = "ur"
+
         transcriber = get_transcriber()
-        result = transcriber.transcribe(content, original_filename=filename)
+        result = transcriber.transcribe(content, original_filename=filename, language=valid_lang)
         return TranscribeResponse(**result)
 
     except HTTPException as he:
