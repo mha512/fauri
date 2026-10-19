@@ -15,6 +15,10 @@ from pydantic import BaseModel, Field
 from app.classifier import MessageClassifier
 from app.transcriber import AudioTranscriber
 
+logging.basicConfig(
+    level=logging.INFO,
+    format="%(asctime)s [%(levelname)s] %(name)s: %(message)s"
+)
 logger = logging.getLogger("fauri.api")
 
 app = FastAPI(
