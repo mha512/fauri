@@ -78,4 +78,40 @@ class IntegrationJobTest extends TestCase
         $this->assertEquals('failed', $fresh->ai_status);
         $this->assertStringContainsString('AI Service unavailable', $fresh->ai_error);
     }
+
+    public function test_classify_message_job_sends_api_key_header(): void
+    {
+        config(['services.ai.key' => 'secret-test-token-777']);
+        $user = User::factory()->create();
+        $business = $user->currentBusiness();
+
+        $message = Message::create([
+            'business_id' => $business->id,
+            'body' => 'testing api key header delivery',
+            'source' => 'paste',
+            'category' => 'unclassified',
+            'urgency' => 'medium',
+            'status' => 'pending',
+            'ai_status' => 'pending',
+        ]);
+
+        $receivedApiKey = null;
+        Http::fake([
+            '*/classify' => function (\Illuminate\Http\Client\Request $request) use (&$receivedApiKey) {
+                $receivedApiKey = $request->header('X-API-Key')[0] ?? null;
+                return Http::response([
+                    'category' => 'inquiry',
+                    'urgency' => 'low',
+                    'summary' => 'Product Inquiry',
+                    'confidence' => 0.95,
+                ], 200);
+            },
+        ]);
+
+        $job = new ClassifyMessageJob($message);
+        $job->handle();
+
+        $this->assertEquals('secret-test-token-777', $receivedApiKey);
+        $this->assertEquals('completed', $message->fresh()->ai_status);
+    }
 }

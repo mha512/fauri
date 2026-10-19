@@ -122,6 +122,9 @@ cd ai-service
 # Install dependencies
 pip install -r requirements.txt
 
+# (Optional) Set shared-secret API key for endpoint authentication
+export AI_API_KEY=fauri_super_secret_key_change_me
+
 # Set Whisper model size (defaults to 'small', falls back to 'tiny' only if disk < 1.5GB)
 export WHISPER_MODEL=small
 
@@ -129,7 +132,7 @@ export WHISPER_MODEL=small
 python train.py
 python train.py --retrain
 
-# Run tests
+# Run tests (17 unit, auth, and negation tests)
 pytest tests/ -v
 
 # Start FastAPI server
@@ -151,13 +154,16 @@ npm run build
 cp .env.example .env
 php artisan key:generate
 
+# Set shared-secret API key to authenticate with AI service
+# In .env: AI_SERVICE_KEY=fauri_super_secret_key_change_me
+
 # Run migrations and seed Pakistani SMB demo data (local only)
 php artisan migrate --seed
 
-# Run Laravel test suite
+# Run Laravel test suite (33 feature & unit tests)
 php artisan test
 
-# Start background queue worker (required for async classification & transcription)
+# Start background queue worker (or set QUEUE_CONNECTION=sync for instant local triage)
 php artisan queue:work --tries=3
 
 # Start development server
@@ -171,6 +177,8 @@ php artisan serve --port=8000
 - **Dataset:** 600 balanced synthetic messages in Roman Urdu, Urdu script, and English (`ai-service/data/messages.csv`).
 - **Embedding Model:** `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` (384-dimensional).
 - **Classifier:** scikit-learn `LogisticRegression(C=2.0)`.
+- **Artifact Packaging:** `ai-service/models/classifier.pkl` is **committed directly to the Git repository** and copied into the Docker image at build time. It is **not** trained during `docker build`, ensuring fast, deterministic, reproducible image builds without internet access or GPU dependencies.
+- **Active Retraining:** Merchants can correct misclassifications in the Livewire UI (`is_verified = true`), and retrain via `python train.py --retrain`.
 
 ```text
 ============================================================
@@ -188,16 +196,16 @@ TEST ACCURACY:  84.17% (Stratified 80/20 Test Split)
     accuracy                          0.8417       120
 ```
 
-> **Note on Real-World Accuracy:** Synthetic-data accuracy is optimistic. Real WhatsApp messages feature non-standard phonetic spellings and noisy code-switching. Fauri includes an inline human correction loop so merchants can actively build authentic training data directly from their daily operations.
+> **Note on Real-World Accuracy & Negation:** Real WhatsApp messages feature complex Roman Urdu negation (`"deliver nahi hua"`, `"cancel na karein"`, `"replacement nahi chahiye"`). Fauri incorporates dedicated semantic negation rules in `ai-service/app/rules.py` that preserve negation tokens and prevent false `order` or `refund` classifications.
 
 ---
 
 ## 7. Free Production Deployment
 
-See [DEPLOY.md](file:///c:/Users/Abdullah/Desktop/PSL%20ANALYZER/DEPLOY.md) for detailed step-by-step instructions:
-- **AI Service:** Hosted on Hugging Face Spaces (Docker SDK, port 7860, free 16GB CPU).
-- **Web App:** Hosted on Render.com (Docker web service, free tier, database queues).
-- **Database:** Free cloud MySQL (Aiven / TiDB Cloud) or persistent SQLite.
+See [DEPLOY.md](file:///c:/Users/Abdullah/Desktop/PSL%20ANALYZER/DEPLOY.md) for step-by-step instructions:
+- **AI Service:** Hosted on Hugging Face Spaces (Docker SDK, port 7860, free 16GB CPU, secured via `AI_API_KEY`).
+- **Web App:** Hosted on Render.com (`render.yaml` free tier blueprint with zero paid background workers, `QUEUE_CONNECTION=sync` for instant triage or external cron via `queue:work --stop-when-empty`).
+- **Database:** Free Cloud MySQL via TiDB Cloud Serverless (5GB free) or Aiven MySQL (5GB free).
 
 ---
 
@@ -209,7 +217,8 @@ See [BRAND.md](file:///c:/Users/Abdullah/Desktop/PSL%20ANALYZER/BRAND.md) for th
 
 ## 9. Known Limitations & Production Caveats
 
-1. **Whisper "small" CPU Speed (~15–25s latency):** On CPU without CUDA hardware acceleration, `faster-whisper-small` (int8 quantized) requires approximately 15–25 seconds of processing time per 6–8 second WhatsApp audio clip. For production, voice note transcription should always be dispatched via the asynchronous Laravel queue (`TranscribeAudioJob`) rather than blocking synchronous HTTP requests.
-2. **TTS-Only Synthetic Audio Testing:** Speech-to-text accuracy verification was conducted using synthetic Pakistani neural TTS voices (`ur-PK-UzmaNeural`, `ur-PK-AsadNeural`). Real-world voice notes recorded via low-cost mobile phone microphones with ambient Pakistani bazaar/traffic background noise, heavy accents, and noisy Roman Urdu code-switching will exhibit higher Word Error Rates (WER). A repeat-token loop guard and temperature fallback (0.2) have been implemented to mitigate repetition artifacts.
+1. **Whisper "small" CPU Speed (~15–25s latency):** On CPU without CUDA hardware acceleration, `faster-whisper-small` (int8 quantized) requires approximately 15–25 seconds of processing time per 6–8 second WhatsApp audio clip. For production, voice note transcription should always be dispatched via the asynchronous Laravel queue (`TranscribeAudioJob`) or queued workers.
+2. **TTS-Only Synthetic Audio Testing:** Speech-to-text accuracy verification was conducted using synthetic Pakistani neural TTS voices (`ur-PK-UzmaNeural`, `ur-PK-AsadNeural`). Real-world voice notes recorded via low-cost mobile phone microphones with ambient Pakistani bazaar/traffic background noise, heavy accents, and noisy Roman Urdu code-switching will exhibit higher Word Error Rates (WER). A repeat-token loop guard, temperature fallback (0.2), and a clear UI notice (`🎙️ Auto-transcribed, please verify`) have been implemented.
 3. **Docker Untested on Host:** Docker deployment assets (`Dockerfile`, `ai-service/Dockerfile`, `docker-compose.yml`) are fully authored according to standard Linux containerization practices, but the Docker daemon was not directly tested or executed on the local Windows host environment during development.
+4. **Render Free Tier Ephemeral Storage:** Containers on Render Free spin down on 15 minutes of inactivity, resetting SQLite databases and local audio uploads. Persistent external MySQL (TiDB / Aiven) and S3/R2 object storage are documented in [DEPLOY.md](file:///c:/Users/Abdullah/Desktop/PSL%20ANALYZER/DEPLOY.md).
 

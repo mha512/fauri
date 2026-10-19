@@ -8,7 +8,7 @@ import joblib
 import numpy as np
 from typing import Dict, Any, Optional
 from sentence_transformers import SentenceTransformer
-from app.rules import detect_urgency, generate_summary
+from app.rules import detect_urgency, generate_summary, preserve_negations, refine_with_negation_rules
 
 BASE_DIR = os.path.dirname(os.path.dirname(os.path.abspath(__file__)))
 MODEL_FILE = os.path.join(BASE_DIR, "models", "classifier.pkl")
@@ -73,16 +73,24 @@ class MessageClassifier:
                 "confidence": 0.5
             }
 
+        # Preserve negation tokens strictly
+        clean_text = preserve_negations(text)
+
         # Embed text
-        emb = self.embedder.encode([text], device="cpu")
+        emb = self.embedder.encode([clean_text], device="cpu")
         probs = self.clf.predict_proba(emb)[0]
         max_idx = int(np.argmax(probs))
         category = self.clf.classes_[max_idx]
         confidence = float(probs[max_idx])
 
-        # Urgency & Summary heuristics
-        urgency = detect_urgency(text, category)
-        summary = generate_summary(text, category, urgency)
+        # Urgency detection
+        urgency = detect_urgency(clean_text, category)
+
+        # Negation-aware intent refinement
+        category, urgency = refine_with_negation_rules(clean_text, category, urgency)
+
+        # Summary heuristics
+        summary = generate_summary(clean_text, category, urgency)
 
         return {
             "category": category,

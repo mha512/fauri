@@ -13,6 +13,9 @@ An intelligent customer-message triage platform for Pakistani SMBs (WhatsApp tex
 | **Phase 3** | **Integration**: Queued background jobs (`ClassifyMessageJob`, `TranscribeAudioJob`), retry with backoff, resilient fallbacks | **COMPLETED** | `web/app/Jobs/`, 2/2 integration tests passed, end-to-end verified |
 | **Phase 4** | **UI/UX**: Modern classic theme, responsive landing page, dashboard with urgency feed, category chart, dark/light mode, Urdu Nastaliq RTL, audio player, toasts | **COMPLETED** | `web/resources/views/`, responsive at 360px, 768px, 1280px |
 | **Phase 5** | **Deployment Prep**: HF Space Dockerfile, Render Dockerfile + render.yaml, DEPLOY.md, docker-compose.yml, README.md | **COMPLETED** | `docker-compose.yml`, `DEPLOY.md`, `render.yaml`, `README.md` |
+| **Phase 6** | **Audit & Hardening**: Whisper small model verification, STT accuracy test, feedback loop, seeder guard | **COMPLETED** | 13/13 pytest passed, 32/32 artisan passed |
+| **Phase 7** | **Laravel 12 & STT Guard**: Laravel 12 upgrade, composer audit 0 advisories, repeat token guard, audio UI | **COMPLETED** | 17/17 pytest passed, 33/33 artisan passed |
+| **Phase 8** | **Auth, Free Tier & Negation**: Shared-secret auth, Render free tier sync queue, STT verification note, Roman Urdu negation rules | **COMPLETED** | 17/17 pytest passed, 33/33 artisan passed, classifier.pkl committed |
 
 ---
 
@@ -134,10 +137,42 @@ An intelligent customer-message triage platform for Pakistani SMBs (WhatsApp tex
 
 ---
 
+## Phase 8: Shared-Secret Auth, Render Free Tier & Negation Intelligence (Completed)
+
+- [x] **Shared-Secret Authentication**:
+  - Secured `ai-service` via `@app.middleware("http")` `verify_api_key_middleware`: requests to `/classify` and `/transcribe` require `X-API-Key` matching `AI_API_KEY` (when configured).
+  - Unauthenticated endpoints strictly preserved: `/health`, `/`, docs (`/docs`, `/redoc`, `/openapi.json`), and CORS `OPTIONS` preflight requests remain public so monitoring probes (Render, Hugging Face, UptimeRobot) operate without leaking credentials.
+  - Configured Laravel `services.ai.key` via `AI_SERVICE_KEY` environment variable (`config/services.php`).
+  - Updated `ClassifyMessageJob.php` and `TranscribeAudioJob.php` to inject `'X-API-Key' => config('services.ai.key')`.
+  - Added unit test `test_shared_secret_auth` in `ai-service/tests/test_api.py` and `test_classify_message_job_sends_api_key_header` in `web/tests/Feature/IntegrationJobTest.php`.
+  - Updated `web/.env.example`, `production.env.example`, `ai-service/.env.example`, and `DEPLOY.md`.
+- [x] **Render Free Tier Blueprint Fix**:
+  - Removed paid background worker (`type: worker`) from `render.yaml` to guarantee zero-cost deployment on Render's free tier.
+  - Set `QUEUE_CONNECTION=sync` for instant in-request triage without any background worker daemon required.
+  - Fully documented scheduled task alternative (`php artisan queue:work --stop-when-empty`) via free external cron or Render Cron Job.
+  - Documented ephemeral filesystem warning: Render free instances spin down after 15 minutes of inactivity, wiping SQLite databases and local audio uploads.
+  - Provided complete step-by-step setup guides in `DEPLOY.md` for free cloud databases: TiDB Cloud Serverless (5GB free) and Aiven MySQL (5GB free), plus Cloudflare R2 / S3 persistent storage.
+- [x] **STT Verification UI & Roman Urdu Negation Intelligence**:
+  - Added visual notice `"🎙️ Auto-transcribed, please verify"` in the Livewire dashboard table and drawer alongside audio player controls.
+  - Updated `ai-service/app/rules.py` with `preserve_negations()` and `refine_with_negation_rules()`: ensures negation particles (`nahi`, `nhi`, `na`, `nahin`, `نہیں`, `نہ`) are never stripped during preprocessing.
+  - Implemented semantic negation rules:
+    - `"deliver nahi hua"` / `"parcel nhi mila"` -> flips naive `order` classification to `complaint`.
+    - `"cancel na karein"` / `"cancel mat krna"` -> flips false `refund` cancellation to `order`.
+    - `"replacement nahi chahiye"` / `"replace mat karein"` -> flips false `order` to `refund`.
+    - `"pasand nahi aya"` / `"nhi chahye"` -> classifies as `refund` / `complaint`.
+  - Added 5 Roman Urdu negation tests (`test_five_roman_urdu_negations`) in `ai-service/tests/test_api.py`. All 17 pytest tests passed in 39.97s.
+- [x] **Model Artifact Status Audit**:
+  - **Audit Finding**: `models/classifier.pkl` is **committed directly to the Git repository** (`ai-service/models/classifier.pkl`, commit `c527353` and updated in `30a1fe5`).
+  - In `ai-service/Dockerfile`, line 36 copies the application and models directly (`COPY --chown=user:user . /app/`). The Docker build does **NOT** run `python train.py`. Instead, it pre-downloads the embedding model (`MiniLM-L12-v2`) and Whisper small weights (`WhisperModel('small')`), while copying the pre-trained and committed `classifier.pkl`.
+  - The model can be re-trained at any time via `python train.py` or `python train.py --retrain` (from verified SQLite data), and the updated `.pkl` is then committed to Git.
+
+---
+
 ## Known Limitations & Honest Disclaimers
 
 1. **Whisper "small" CPU Latency (~15–25s):** On standard CPU without GPU acceleration, transcribing a 6–8 second voice note takes ~15–25 seconds. Designed strictly for asynchronous background queue execution (`TranscribeAudioJob`), not blocking user HTTP requests.
 2. **TTS-Only Synthetic Audio Testing:** STT verification was performed using Microsoft Edge synthetic neural TTS voices (`ur-PK-UzmaNeural`, `ur-PK-AsadNeural`). In real-world environments, background noise, low-end phone microphones, heavy accents, and mixed Roman Urdu/English code-switching will yield higher error rates.
 3. **Docker Untested on Host:** Docker deployment specifications (`Dockerfile`, `ai-service/Dockerfile`, `docker-compose.yml`) are written according to best practices for containerized cloud deployment (Render & Hugging Face Spaces), but Docker engine was not run or verified on this Windows development host.
+4. **Render Free Tier Ephemeral Storage:** Containers on Render Free spin down on idle, losing local files and SQLite state. Cloud MySQL (TiDB / Aiven) and S3/R2 object storage are strongly recommended for persistent production use.
 
 

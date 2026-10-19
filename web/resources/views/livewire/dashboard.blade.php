@@ -454,11 +454,15 @@
 
                         <!-- Audio Player if Voice Note -->
                         @if($msg->source === 'voice' && $msg->audio_path)
-                            <div class="mt-2">
+                            <div class="mt-2 space-y-1">
                                 <audio controls class="h-8 w-full max-w-sm rounded">
                                     <source src="{{ asset('storage/' . $msg->audio_path) }}" type="audio/mpeg">
                                     Your browser does not support audio element.
                                 </audio>
+                                <div class="text-[10px] text-amber-600 dark:text-amber-400 flex items-center gap-1 font-semibold">
+                                    <span>🎙️</span>
+                                    <span>Auto-transcribed, please verify</span>
+                                </div>
                             </div>
                         @endif
 
@@ -783,7 +787,12 @@
             <!-- Audio Player if audio present -->
             @if($activeMessage->source === 'voice' && $activeMessage->audio_path)
             <div class="mt-4">
-                <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider mb-1">Original Voice Note Audio</label>
+                <div class="flex items-center justify-between mb-1">
+                    <label class="block text-xs font-bold text-slate-500 uppercase tracking-wider">Original Voice Note Audio</label>
+                    <span class="text-[11px] text-amber-600 dark:text-amber-400 font-semibold flex items-center gap-1 bg-amber-50 dark:bg-amber-950/40 px-2 py-0.5 rounded-md border border-amber-200 dark:border-amber-900/40">
+                        <span>🎙️</span> Auto-transcribed, please verify
+                    </span>
+                </div>
                 <audio controls class="w-full rounded">
                     <source src="{{ asset('storage/' . $activeMessage->audio_path) }}" type="audio/mpeg">
                 </audio>

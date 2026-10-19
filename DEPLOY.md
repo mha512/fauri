@@ -12,17 +12,17 @@ Deploy a complete, production-grade installation of Fauri without spending a sin
              ▼
 ┌───────────────────────────────┐        ┌───────────────────────────────┐
 │        Render.com             │        │     Hugging Face Spaces       │
-│  (Laravel 11 + Livewire 3)    │ ────── │   (FastAPI CPU Microservice)  │
+│  (Laravel 12 + Livewire 3)    │ ────── │   (FastAPI CPU Microservice)  │
 │                               │  HTTP  │                               │
-│  • Web UI Dashboard & Ingest  │        │  • Faster-Whisper (Small int8)│
-│  • Database Background Queues │        │  • Multilingual MiniLM L12-v2 │
-│  • Multi-tenant Isolation     │        │  • Heuristic Urgency Rules    │
+│  • Web UI Dashboard & Ingest  │ Header │  • Faster-Whisper (Small int8)│
+│  • Sync or Scheduled Queues   │ X-API- │  • Multilingual MiniLM L12-v2 │
+│  • Multi-tenant Isolation     │  Key   │  • Heuristic Urgency Rules    │
 └───────────────────────────────┘        └───────────────────────────────┘
-             │
-             ▼
-┌───────────────────────────────┐
-│     SQLite or Free MySQL      │
-│  (Aiven / TiDB / PlanetScale) │
+             │                                           │
+             ▼                                           ▼
+┌───────────────────────────────┐              [HF Secret: AI_API_KEY]
+│   Free Cloud MySQL (TiDB)     │
+│   + Cloudflare R2 Audio       │
 └───────────────────────────────┘
 ```
 
@@ -38,14 +38,21 @@ Hugging Face provides free 2 vCPU, 16GB RAM Docker instances with no credit card
 3. Space SDK: Select **Docker** (Blank).
 4. License: `MIT` &bull; Visibility: **Public** (or Private with an access token).
 
-### Step 2: Upload AI Service Files
+### Step 2: Configure Shared-Secret Auth
+Under Space **Settings** &rarr; **Variables and secrets**:
+1. Click **New secret**.
+2. Name: `AI_API_KEY`
+3. Value: Generate a random 32-character secret (e.g. `openssl rand -hex 16`).
+4. Save. This shared secret ensures only your authorized Laravel backend can trigger classification and transcription requests. The `/health` probe remains public for monitoring.
+
+### Step 3: Upload AI Service Files
 Clone your newly created Space repository to your local machine:
 ```bash
 git clone https://huggingface.co/spaces/<YOUR-USERNAME>/fauri-ai
 cd fauri-ai
 ```
 
-Copy the contents of the `/ai-service` directory into your Space root:
+Copy the contents of `/ai-service` into your Space root:
 ```bash
 # Files to copy:
 Dockerfile
@@ -64,112 +71,153 @@ models/
   classifier.pkl
 ```
 
-### Step 3: Push to Hugging Face
+### Step 4: Push to Hugging Face
 ```bash
 git add .
-git commit -m "Deploy Fauri AI Service"
+git commit -m "Deploy Fauri AI Service with shared-secret auth"
 git push origin main
 ```
 
-### Step 4: Build & URL Generation
-- Hugging Face automatically executes the `Dockerfile`.
-- During build, `Systran/faster-whisper-small` and `sentence-transformers/paraphrase-multilingual-MiniLM-L12-v2` are downloaded and cached directly into `/home/user/.cache/huggingface`.
+### Step 5: Build & Endpoint Verification
+- Hugging Face automatically builds the Docker container. Pre-cached embeddings (`MiniLM-L12-v2`) and Whisper small (`faster-whisper-small`) are ready in memory.
 - Your public direct API endpoint will be:
   `https://<YOUR-USERNAME>-fauri-ai.hf.space`
-
-### Cold-Start Notes & Mitigation
-> [!NOTE]
-> **Free Space Sleeping Behavior:**
-> Free Hugging Face Spaces enter sleep mode after 48 hours of complete inactivity. When an incoming request arrives, the space wakes up in approximately 15-20 seconds.
-> 
-> **How Fauri handles this gracefully:**
-> 1. Fauri does not block the web UI; classification and transcription execute in Laravel database queues (`ClassifyMessageJob`).
-> 2. Jobs are configured with 3 retries and exponential backoff (`$backoff = [5, 15, 45]`).
-> 3. If the AI space is waking up on the first retry, subsequent retries succeed seamlessly once the container is alive.
-> 4. If the service is unreachable after 3 attempts, the message status is marked as `unclassified` with a 1-click **Retry** button in the dashboard.
-
----
-
-## Part 2: Database Options
-
-### Option A: Embedded SQLite (Simplest, Zero Cost)
-- Laravel 11 runs out-of-the-box on SQLite (`database/database.sqlite`).
-- Suitable for small businesses triaging < 2,000 messages per month.
-- Ensure the database file resides on a persistent directory or volume.
-
-### Option B: Free Cloud MySQL / Postgres (Recommended for Scalability)
-- **Aiven Cloud**: Free 5GB MySQL database instance.
-- **TiDB Serverless**: Free 5GB MySQL-compatible database instance.
-- Connection string in `.env`:
-  ```env
-  DB_CONNECTION=mysql
-  DB_HOST=your-instance.aivencloud.com
-  DB_PORT=3306
-  DB_DATABASE=fauri
-  DB_USERNAME=avnadmin
-  DB_PASSWORD=your_password
+- Verify the public health endpoint:
+  ```bash
+  curl -s https://<YOUR-USERNAME>-fauri-ai.hf.space/health
+  # Expected: {"status":"ok","service":"fauri-ai","stt_model":"small",...}
   ```
 
 ---
 
-## Part 3: Deploy Laravel Web Application on Render.com (Free Tier)
+## Part 2: Database & Storage Configuration
 
-Render offers free web services that run Docker containers natively.
+> [!WARNING]
+> **Render Free Tier Ephemeral Filesystem Warning:**
+> On Render's Free tier, the container filesystem is **ephemeral**. Any files created at runtime (such as local SQLite database `database/database.sqlite` or voice notes uploaded to `storage/app/public/voice_notes/`) **will be wiped** whenever the container spins down due to inactivity (after 15 minutes) or when a new deployment occurs.
+> 
+> For a temporary zero-setup demo, SQLite is supported out of the box. **For production, you must use an external free cloud MySQL database and cloud storage.**
+
+### Option A: TiDB Cloud Serverless (Recommended Free MySQL)
+TiDB Cloud provides a fully managed, MySQL 8.0-compatible Serverless tier with **5GB free storage and 50 million Request Units per month for free** with no credit card required:
+1. Sign up at [tidbcloud.com](https://tidbcloud.com).
+2. Click **Create Cluster** &rarr; Select **Serverless (Free)**.
+3. Click **Connect** &rarr; Select **General** connection method.
+4. Note your credentials and set the following Render environment variables:
+   ```env
+   DB_CONNECTION=mysql
+   DB_HOST=gateway01.us-west-2.prod.aws.tidbcloud.com
+   DB_PORT=4000
+   DB_DATABASE=fauri
+   DB_USERNAME=<YOUR_TIDB_USERNAME>
+   DB_PASSWORD=<YOUR_TIDB_PASSWORD>
+   ```
+
+### Option B: Aiven Cloud MySQL (Alternative Free MySQL)
+Aiven provides a free forever 5GB managed MySQL instance:
+1. Sign up at [aiven.io](https://aiven.io) &rarr; Create a **Free MySQL** service.
+2. Under Overview, copy the Host, Port (`3306`), and download the CA certificate (`ca.pem`).
+3. Set the Render environment variables:
+   ```env
+   DB_CONNECTION=mysql
+   DB_HOST=mysql-xxxx-your-project.aivencloud.com
+   DB_PORT=3306
+   DB_DATABASE=defaultdb
+   DB_USERNAME=avnadmin
+   DB_PASSWORD=<YOUR_AIVEN_PASSWORD>
+   ```
+
+### Persistent Voice Note Storage (Cloudflare R2 / AWS S3)
+To ensure uploaded WhatsApp audio files persist across dyno restarts:
+1. Create a free bucket on [Cloudflare R2](https://developers.cloudflare.com/r2/) (10GB free storage, zero egress fees).
+2. Set the following environment variables on Render:
+   ```env
+   FILESYSTEM_DISK=s3
+   AWS_ACCESS_KEY_ID=<YOUR_R2_ACCESS_KEY>
+   AWS_SECRET_ACCESS_KEY=<YOUR_R2_SECRET_KEY>
+   AWS_DEFAULT_REGION=auto
+   AWS_BUCKET=fauri-audio
+   AWS_ENDPOINT=https://<YOUR_ACCOUNT_ID>.r2.cloudflarestorage.com
+   ```
+
+---
+
+## Part 3: Deploy Laravel Web Application on Render.com (100% Free Tier)
+
+Render's free tier supports Docker web services. **Background worker services (`type: worker`) require a paid starter plan ($7/mo)**. Fauri is engineered to run 100% on the Free tier using two options:
+
+### Queue Processing Modes on Free Tier:
+
+| Mode | Configuration | How It Works | Best For |
+|---|---|---|---|
+| **Demo Mode (Default)** | `QUEUE_CONNECTION=sync` | Triage and transcription jobs execute immediately within the web request without needing any background worker. | Live interactive demos, testing, and low-traffic shops. |
+| **Scheduled Worker Mode** | `QUEUE_CONNECTION=database` | Jobs are stored in the database. A free external scheduler or Render cron triggers `php artisan queue:work --stop-when-empty --max-time=50` every 5-10 minutes. | Medium-volume async processing with zero worker fees. |
 
 ### Step 1: Push Repository to GitHub
-Push your project containing `/web` and `render.yaml` to GitHub.
+Push your repository containing `/web` and the updated `render.yaml` to GitHub.
 
-### Step 2: Create Web Service on Render
+### Step 2: Deploy via Blueprint or Manual Web Service
 1. Log in to [Render.com](https://render.com).
-2. Click **New +** &rarr; **Web Service**.
-3. Connect your GitHub repository.
-4. Settings:
+2. Click **New +** &rarr; Select **Blueprint** (connect repo to deploy from `render.yaml`) OR click **Web Service**:
    - **Name:** `fauri-web`
-   - **Region:** Oregon (US West) or Frankfurt (EU)
    - **Environment:** `Docker`
    - **Dockerfile Path:** `./web/Dockerfile`
    - **Docker Context:** `./web`
    - **Instance Type:** `Free`
 
 ### Step 3: Configure Environment Variables in Render Dashboard
-Add the following key-value pairs under **Environment**:
+Add the following key-value pairs:
 
-| Key | Value / Guidance |
+| Variable | Value / Description |
 |---|---|
 | `APP_NAME` | `Fauri` |
 | `APP_ENV` | `production` |
 | `APP_DEBUG` | `false` |
-| `APP_KEY` | *(Generate via `php artisan key:generate --show` or Render auto-value)* |
-| `APP_URL` | `https://fauri-web.onrender.com` *(your assigned Render URL)* |
-| `DB_CONNECTION` | `sqlite` *(or `mysql` if using Aiven)* |
-| `DB_DATABASE` | `/var/www/html/database/database.sqlite` |
+| `APP_KEY` | `base64:...` *(Generate with `php artisan key:generate --show`)* |
+| `APP_URL` | `https://fauri-web.onrender.com` |
+| `DB_CONNECTION` | `mysql` *(or `sqlite` for temporary demo)* |
+| `DB_HOST` | `<your-cloud-db-host>` |
+| `DB_PORT` | `4000` *(TiDB) or `3306` (Aiven)* |
+| `DB_DATABASE` | `fauri` |
+| `DB_USERNAME` | `<db-user>` |
+| `DB_PASSWORD` | `<db-password>` |
 | `SESSION_DRIVER` | `database` |
-| `QUEUE_CONNECTION` | `database` |
+| `QUEUE_CONNECTION` | `sync` *(instant demo)* or `database` *(scheduled worker)* |
 | `CACHE_STORE` | `database` |
-| `AI_SERVICE_URL` | `https://<YOUR-USERNAME>-fauri-ai.hf.space` *(from Part 1)* |
+| `AI_SERVICE_URL` | `https://<YOUR-USERNAME>-fauri-ai.hf.space` |
+| `AI_SERVICE_KEY` | `<your-shared-secret>` *(must match `AI_API_KEY` set in Hugging Face)* |
 | `AI_SERVICE_TIMEOUT` | `35` |
 
-### Step 4: Run Migrations and Seed Demo Data
+### Step 4: Run Migrations in Render Shell
 Once deployed, open the Render **Shell** tab for `fauri-web`:
 ```bash
-# Run production migrations
 php artisan migrate --force
-
-# (Optional) Seed demo user and messages
-php artisan db:seed --force
 ```
 
 ---
 
 ## Part 4: Post-Deployment Smoke Test
 
-1. **Verify AI Microservice:**
+1. **Verify AI Microservice Auth & Health:**
    ```bash
+   # Public health check:
    curl -s https://<YOUR-USERNAME>-fauri-ai.hf.space/health
    # Expected: {"status":"ok","service":"fauri-ai",...}
+
+   # Unauthenticated call (rejected):
+   curl -s -X POST https://<YOUR-USERNAME>-fauri-ai.hf.space/classify -H "Content-Type: application/json" -d '{"text":"test"}'
+   # Expected: {"error":"unauthorized",...}
+
+   # Authenticated call (accepted):
+   curl -s -X POST https://<YOUR-USERNAME>-fauri-ai.hf.space/classify \
+     -H "Content-Type: application/json" \
+     -H "X-API-Key: <YOUR_SECRET>" \
+     -d '{"text":"bhai mera parcel kab dispatch hoga"}'
+   # Expected: {"category":"inquiry","urgency":"medium",...}
    ```
-2. **Verify Laravel Web Application:**
+
+2. **Verify Laravel Web Dashboard:**
    Navigate to `https://fauri-web.onrender.com`.
-   - The landing page loads with the Fauri logomark, interactive triage simulator, and pricing in PKR.
-   - Click **Log in** &rarr; Enter `demo@fauri.pk` / `password`.
-   - The dashboard opens with stat cards, category breakdown, and Urdu RTL support.
+   - Register your store or log in.
+   - Paste a Roman Urdu message or upload an audio voice note.
+   - The message is authenticated via `X-API-Key`, triaged by Fauri AI, and surfaced in the dashboard in real time with Nastaliq RTL formatting.

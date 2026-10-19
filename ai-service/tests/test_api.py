@@ -162,3 +162,72 @@ def test_repeat_token_guard_detection():
     cleaned = AudioTranscriber.clean_repeats("parcel parcel parcel parcel parcel")
     assert cleaned == "parcel"
 
+def test_shared_secret_auth(monkeypatch):
+    """
+    Verifies that when AI_API_KEY is set:
+    1. /health is exempt from auth.
+    2. Missing or wrong X-API-Key returns 401 Unauthorized.
+    3. Matching X-API-Key succeeds.
+    """
+    secret = "fauri_test_secret_987"
+    monkeypatch.setenv("AI_API_KEY", secret)
+
+    # 1. /health is exempt (user requirement: except /health)
+    health_resp = client.get("/health")
+    assert health_resp.status_code == 200
+    assert health_resp.json()["status"] == "ok"
+
+    # 2. Missing X-API-Key on /classify -> 401
+    unauth_resp = client.post("/classify", json={"text": "bhai mera parcel kab aega"})
+    assert unauth_resp.status_code == 401
+    assert unauth_resp.json()["error"] == "unauthorized"
+
+    # 3. Invalid X-API-Key -> 401
+    wrong_resp = client.post(
+        "/classify",
+        json={"text": "bhai mera parcel kab aega"},
+        headers={"X-API-Key": "wrong_key"}
+    )
+    assert wrong_resp.status_code == 401
+
+    # 4. Correct X-API-Key -> 200
+    auth_resp = client.post(
+        "/classify",
+        json={"text": "bhai mera parcel kab aega"},
+        headers={"X-API-Key": secret}
+    )
+    assert auth_resp.status_code == 200
+    assert "category" in auth_resp.json()
+
+def test_five_roman_urdu_negations():
+    """
+    Verifies that negation words (nahi, nhi, na, nahin) are preserved
+    and correctly steer classification & urgency across 5 Roman Urdu samples.
+    """
+    from app.classifier import MessageClassifier
+    clf = MessageClassifier.get_instance()
+
+    # Negation Test 1: Non-delivery complaint (not an order)
+    res1 = clf.classify("bhai order deliver nahi hua abhi tak 5 din ho gaye")
+    assert res1["category"] == "complaint"
+    assert res1["urgency"] in ["medium", "high"]
+
+    # Negation Test 2: Rejecting replacement, requesting refund
+    res2 = clf.classify("mujhe replacement nahi chahiye mere paise wapis karein")
+    assert res2["category"] == "refund"
+    assert res2["urgency"] in ["medium", "high"]
+
+    # Negation Test 3: Disliking product, returning
+    res3 = clf.classify("ye suit pasand nahi aya return krna hai")
+    assert res3["category"] in ["refund", "complaint"]
+
+    # Negation Test 4: Parcel not received, delivery rider issue
+    res4 = clf.classify("parcel receive nhi hua rider ka number dein")
+    assert res4["category"] == "complaint"
+    assert res4["urgency"] in ["medium", "high"]
+
+    # Negation Test 5: "cancel na karein" (Do NOT cancel order)
+    res5 = clf.classify("mera order cancel na karein please dispatch krwa dein")
+    assert res5["category"] == "order"
+
+

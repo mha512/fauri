@@ -50,6 +50,10 @@ class TranscribeAudioJob implements ShouldQueue
 
         $aiUrl = rtrim(config('services.ai.url', 'http://127.0.0.1:8001'), '/');
         $timeout = (int) env('AI_SERVICE_AUDIO_TIMEOUT', 90);
+        $headers = [];
+        if ($apiKey = config('services.ai.key')) {
+            $headers['X-API-Key'] = $apiKey;
+        }
 
         try {
             $audioContents = file_get_contents($fullPath);
@@ -57,6 +61,7 @@ class TranscribeAudioJob implements ShouldQueue
             $langParam = $this->language ?: ($this->message->detected_language ?? 'ur');
 
             $response = Http::timeout($timeout)
+                ->withHeaders($headers)
                 ->attach('file', $audioContents, $filename)
                 ->post("{$aiUrl}/transcribe", [
                     'language' => $langParam,

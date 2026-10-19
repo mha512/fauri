@@ -7,7 +7,7 @@ import os
 import time
 import logging
 from typing import Dict, Any, Optional
-from fastapi import FastAPI, HTTPException, UploadFile, File, Form, status
+from fastapi import FastAPI, HTTPException, UploadFile, File, Form, Request, status
 from fastapi.responses import JSONResponse
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel, Field
@@ -41,6 +41,29 @@ app.add_middleware(
     allow_methods=["*"],
     allow_headers=["*"],
 )
+
+# Shared-secret API key authentication middleware (exempts /health)
+@app.middleware("http")
+async def verify_api_key_middleware(request: Request, call_next):
+    # Exclude /health and documentation endpoints from authentication
+    if request.url.path in ("/health", "/", "/docs", "/openapi.json", "/redoc") or request.method == "OPTIONS":
+        return await call_next(request)
+
+    expected_api_key = os.getenv("AI_API_KEY", "").strip()
+    if expected_api_key:
+        api_key = request.headers.get("x-api-key")
+        if not api_key or api_key != expected_api_key:
+            return JSONResponse(
+                status_code=status.HTTP_401_UNAUTHORIZED,
+                content={
+                    "error": "unauthorized",
+                    "message": "Invalid or missing X-API-Key header.",
+                    "detail": "Requests to this endpoint require a valid 'X-API-Key' matching AI_API_KEY.",
+                    "status": "error"
+                }
+            )
+
+    return await call_next(request)
 
 # Request & Response schemas
 class ClassifyRequest(BaseModel):

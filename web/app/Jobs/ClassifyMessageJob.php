@@ -48,9 +48,14 @@ class ClassifyMessageJob implements ShouldQueue
 
         $aiUrl = rtrim(config('services.ai.url', 'http://127.0.0.1:8001'), '/');
         $timeout = (int) config('services.ai.timeout', 20);
+        $headers = [];
+        if ($apiKey = config('services.ai.key')) {
+            $headers['X-API-Key'] = $apiKey;
+        }
 
         try {
             $response = Http::timeout($timeout)
+                ->withHeaders($headers)
                 ->acceptJson()
                 ->post("{$aiUrl}/classify", [
                     'text' => $this->message->body,

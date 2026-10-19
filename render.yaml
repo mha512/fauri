@@ -1,5 +1,5 @@
 services:
-  # 1. Laravel Web Application Service
+  # 1. Laravel Web Application Service (100% Free Tier Compatible)
   - type: web
     name: fauri-web
     runtime: docker
@@ -22,36 +22,24 @@ services:
           type: web
           name: fauri-web
           property: host
+      # Database: SQLite is default for zero-setup demo (Note: ephemeral on free tier).
+      # For persistent cloud storage, set DB_CONNECTION=mysql (see DEPLOY.md for free TiDB/Aiven setup).
       - key: DB_CONNECTION
         value: sqlite
       - key: DB_DATABASE
         value: /var/www/html/database/database.sqlite
       - key: SESSION_DRIVER
         value: database
+      # Queue: Set to 'sync' for free tier demo (processes triage inline without paid worker).
+      # If using a scheduled worker (php artisan queue:work --stop-when-empty), set to 'database'.
       - key: QUEUE_CONNECTION
-        value: database
+        value: sync
       - key: CACHE_STORE
         value: database
+      # Shared Secret AI Service connection (matches Hugging Face Space AI_API_KEY)
       - key: AI_SERVICE_URL
-        sync: false # Set to your deployed Hugging Face Space URL (e.g., https://your-username-fauri-ai.hf.space)
+        sync: false # Set to your deployed Hugging Face Space URL (e.g. https://your-username-fauri-ai.hf.space)
+      - key: AI_SERVICE_KEY
+        sync: false # Set to your secret API key matching AI_API_KEY on the AI service
       - key: AI_SERVICE_TIMEOUT
-        value: "30"
-
-  # 2. Database Queue Worker (Optional Background Service)
-  - type: worker
-    name: fauri-queue-worker
-    runtime: docker
-    dockerfilePath: ./web/Dockerfile
-    dockerContext: ./web
-    plan: free
-    region: oregon
-    command: php artisan queue:work --tries=3 --timeout=60
-    envVars:
-      - key: APP_ENV
-        value: production
-      - key: DB_CONNECTION
-        value: sqlite
-      - key: QUEUE_CONNECTION
-        value: database
-      - key: AI_SERVICE_URL
-        sync: false
+        value: "35"

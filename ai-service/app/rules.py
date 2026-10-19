@@ -39,9 +39,10 @@ MEDIUM_URGENCY_KEYWORDS = [
     r"\bmissing\b", r"\bpaise wapas\b", r"\bpesay wapis\b", r"\brefund\b", r"\bcancel\b",
     r"\bexchange\b", r"\bchange\b", r"\blate\b", r"\bder\b", r"\bseen kar k chore dia\b",
     r"\breply nahi\b", r"\breply ni\b", r"\bcall pick nai\b", r"\bdissatisfied\b",
+    r"\bdeliver nahi\b", r"\breceive nahi\b", r"\breceive nhi\b", r"\bnahi mila\b", r"\bnhi mila\b",
     # Urdu Script
     r"خراب", r"ٹوٹا", r"غلط", r"واپسی", r"پیسے واپس", r"ریفنڈ", r"کینسل", r"تاخیر",
-    r"کب تک", r"ٹریکنگ", r"گم", r"شکایت", r"ناقص", r"بدتمیزی"
+    r"کب تک", r"ٹریکنگ", r"گم", r"شکایت", r"ناقص", r"بدتمیزی", r"نہیں ملا", r"نہیں آیا"
 ]
 
 LOW_URGENCY_KEYWORDS = [
@@ -124,3 +125,59 @@ def generate_summary(text: str, category: str, urgency: str) -> str:
         return f"Product/Service Inquiry: {snippet}"
     else:
         return f"General Message: {snippet}"
+
+def preserve_negations(text: str) -> str:
+    """
+    Ensures negation words (nahi, nhi, na, nahin, nehi, نہیں, نہ) are never dropped
+    or stripped during token normalization or preprocessing.
+    """
+    if not text:
+        return ""
+    return " ".join(text.strip().split())
+
+def refine_with_negation_rules(text: str, category: str, urgency: str) -> tuple[str, str]:
+    """
+    Refines category and urgency when negation patterns invert message intent:
+    1. Delivery negation ("deliver nahi hua", "receive nhi hua", "nahi mila", "نہیں ملا") -> complaint
+    2. Cancellation negation ("cancel na karein", "cancel nahi karna", "کینسل نہ کریں") -> order
+    3. Replacement rejection ("replacement nahi chahiye", "exchange nahi karna") -> refund
+    4. Product dissatisfaction ("pasand nahi aya return") -> refund
+    """
+    text_lower = text.lower()
+
+    # 1. Non-delivery negation: Order not received / late
+    non_delivery_patterns = [
+        r"\b(?:deliver|delivery|receive|dispatch|pohancha|pohncha|mila)\s+(?:nahi|nhi|nai|ni|na|nahin)\b",
+        r"\b(?:nahi|nhi|nai|ni|na|nahin)\s+(?:deliver|delivery|receive|mila|mili|pohancha|pohncha|aaya|aya)\b",
+        r"(?:نہیں ملا|نہیں آیا|موصول نہیں|ڈیلیور نہیں|نہیں پہنچی|نہیں پہنچا)"
+    ]
+    for pat in non_delivery_patterns:
+        if re.search(pat, text_lower, re.IGNORECASE | re.UNICODE):
+            new_urgency = "high" if re.search(r"\b(?:din|hafte|urgent|jaldi|kab)\b", text_lower) else "medium"
+            return "complaint", new_urgency
+
+    # 2. Negation of cancellation: Customer says DO NOT cancel
+    do_not_cancel_patterns = [
+        r"\b(?:cancel|mansookh)\s+(?:na|nahi|nhi|nai|mat)\s+(?:karein|karna|kro|krna|kijiyega)\b",
+        r"\b(?:na|nahi|nhi|nai|mat)\s+(?:cancel|mansookh)\b",
+        r"(?:کینسل نہ|منسوخ نہ|کینسل مت)"
+    ]
+    for pat in do_not_cancel_patterns:
+        if re.search(pat, text_lower, re.IGNORECASE | re.UNICODE):
+            return "order", "medium"
+
+    # 3. Negation of replacement: Customer rejects exchange, wants refund
+    reject_replacement_patterns = [
+        r"\b(?:replacement|exchange)\s+(?:nahi|nhi|nai|na|nahin)\s+(?:chahiye|krna|karna|leny)\b",
+        r"\b(?:paise|pesay|amount|cash)\s+(?:wapis|wapas|refund)\b"
+    ]
+    for pat in reject_replacement_patterns:
+        if re.search(pat, text_lower, re.IGNORECASE | re.UNICODE):
+            if "replacement" in text_lower or "exchange" in text_lower or "paise" in text_lower or "wapis" in text_lower:
+                return "refund", "medium"
+
+    # 4. Product dissatisfaction: "pasand nahi aya return"
+    if re.search(r"\bpasand\s+(?:nahi|nhi|nai|na)\s+(?:aya|aaya|laga)\b", text_lower):
+        return "refund", "medium"
+
+    return category, urgency
